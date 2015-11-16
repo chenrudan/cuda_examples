@@ -12,7 +12,6 @@
 #include "decision_tree.hpp"
 #include "tools.hpp"
 
-
 Pars mypar;
 
 double getGini(thrust::device_vector<double> &number_in_each_class){
@@ -32,7 +31,6 @@ double getGini(thrust::device_vector<double> &number_in_each_class){
 	sum = thrust::transform_reduce(vec_divides.begin(), vec_divides.end(), \
 			unary_op, (double)0, binary_op);
 
-	//	thrust::copy(vec_divides.begin(), vec_divides.end(), std::ostream_iterator<double>(std::cout, "\n"));
 	return 1-sum;
 }
 
@@ -42,8 +40,6 @@ double getGini(thrust::device_vector<double> &number_in_each_class){
 double getGiniOfFeature(thrust::device_vector<double> &number_in_branch_1, \
 		thrust::device_vector<double> &number_in_branch_2 ){
 	const int all_number = number_in_branch_1.size() + number_in_branch_2.size();
-	std::cout << ((double)number_in_branch_1.size()/all_number)*getGini(number_in_branch_1) \
-		<< ":" << ((double)number_in_branch_2.size()/all_number)*getGini(number_in_branch_2) << std::endl;
 	return ((double)number_in_branch_1.size()/all_number)*getGini(number_in_branch_1) \
 		+ ((double)number_in_branch_2.size()/all_number)*getGini(number_in_branch_2);
 }
@@ -77,7 +73,7 @@ void subBuildDecisionTree(std::set< FeatureValueAndClass<double> > &cur_all_samp
 		double last_min_gini){
 
 
-	if(poses.size() == 0 || last_min_gini == 0)
+	if(poses.size() == 0 || last_min_gini < mypar.gini_threshold)
 		return;
 
 	thrust::host_vector<double> gini_of_pos; ///>选择每一个剩下的特征进行切分得到的gini值
@@ -103,13 +99,9 @@ void subBuildDecisionTree(std::set< FeatureValueAndClass<double> > &cur_all_samp
 		branch1.clear();
 		branch2.clear();
 	}	
-	///返回gini值中比阈值大的位置，大就直接退出
-	thrust::host_vector<double>::iterator it = thrust::upper_bound( \
-			gini_of_pos.begin(), gini_of_pos.end(), mypar.gini_threshold);
-	if(it != gini_of_pos.end())
-		return;
 
-	it = thrust::min_element(gini_of_pos.begin(), gini_of_pos.end());
+	thrust::host_vector<double>::iterator it = \
+			thrust::min_element(gini_of_pos.begin(), gini_of_pos.end());
 	const int least_gini_pos = it - gini_of_pos.begin();
 	pos_path.push_back(poses[least_gini_pos]);
 
@@ -119,44 +111,23 @@ void subBuildDecisionTree(std::set< FeatureValueAndClass<double> > &cur_all_samp
 
 	poses.erase(poses.begin()+least_gini_pos);
 
-	/*
-		std::cout << "number in branch1:\t";
-		thrust::copy(number_in_branch_1.begin(), number_in_branch_1.end(), \
-				std::ostream_iterator<double>(std::cout, "\t"));
-		std::cout << "\n";
-		std::cout << "number in branch2:\t";
-		thrust::copy(number_in_branch_2.begin(), number_in_branch_2.end(), \
-				std::ostream_iterator<double>(std::cout, "\t"));
-		std::cout << "\n";
-	*/
-	std::cout << branch1 << branch2;
-
-		std::cout << "pos path:\t";
-		thrust::copy(pos_path.begin(), pos_path.end(), \
-				std::ostream_iterator<int>(std::cout, "\t"));
-		std::cout << "\n";
-
 	value_path.push_back(1);
-
-		std::cout << "value path:\t";
-		thrust::copy(value_path.begin(), value_path.end(), \
-				std::ostream_iterator<double>(std::cout, "\t"));
-		std::cout << "\n";
-
-	std::cout << "smallest gini:" << *it << "\n";
-	
 	thrust::device_vector<double>::iterator number_it = thrust::max_element( \
 			number_in_branch_1.begin(), number_in_branch_1.end());
-	
+
 	dt.insert(pos_path, value_path, number_it-number_in_branch_1.begin());
-	subBuildDecisionTree(branch1, dt, poses, pos_path, value_path, *it);
+	if(branch1.size() != *number_it)
+		subBuildDecisionTree(branch1, dt, poses, pos_path, value_path, *it);
 	
 	number_it = thrust::max_element(number_in_branch_2.begin(), number_in_branch_2.end());
 
 	value_path.pop_back();
 	value_path.push_back(0);
-	dt.insert(pos_path, value_path, number_it-number_in_branch_1.begin());
-	subBuildDecisionTree(branch2, dt, poses, pos_path, value_path, *it);
+		
+	dt.insert(pos_path, value_path, number_it-number_in_branch_2.begin());
+	///>当分支的数据完全属于某一个类时就不再产生新的分支
+	if(branch2.size() != *number_it)
+		subBuildDecisionTree(branch2, dt, poses, pos_path, value_path, *it);
 }
 
 ///递归的来根据不同的特征取值来划分，暂时特征的取值为0，1
@@ -203,26 +174,21 @@ int main(int argc, char** argv){
 	char output[100];
 	int label;
 	double tmp;
-	std::cout << "f1\tf2\tf3\tlabel\n";
 	while(fin_data>>output){
 		ss << output;
 		ss >> tmp;
 		features[k%num_features] = tmp;
-		std::cout << features[k%num_features] << "\t";
 		ss.clear();
 		k++;
 		if(k % num_features == 0 && k != 0){
 			fin_label >> output;
 			ss << output;
 			ss >> label;
-			std::cout << label;
 			ss.clear();
-			FeatureValueAndClass<double> s(features, k/num_features, label);
-			std::cout << "\n";
+			FeatureValueAndClass<double> s(features, k/num_features, label-1);
 			all_sample.insert(s);
 		}
 	}
-	std::cout << *all_sample.begin();
 	std::cout << all_sample;
 	buildDecisionTree(all_sample);	
 
