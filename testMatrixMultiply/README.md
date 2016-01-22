@@ -18,7 +18,7 @@ Compare the speed of five kernel function with different size of N. And the numb
 Y axis means the cost time.
 
 |N|blas_version|v1|v2|v3|v4|
-|:-----:|:----:|:-----:|:------:|:----:|
+|:-----:|:----:|:-----:|:------:|:----:|:---:|
 |256|	0.0006|	0.0098	|0.063|	0.0076|	0.0015|
 |512|	0.0009|	0.0188|	0.126|	0.0153|	0.0031|
 |1024|	0.0019|	0.037|	0.251|	0.0304|	0.005|
@@ -37,6 +37,7 @@ Value 64,128,256,512,1024 compute M=1024,K=3072,N=1024
 From the result it tells that threads number which is the multiple of 16 outperform others.
 
 |num_threads|cost time|
+|:----:|:----:|
 |50|	0.0453|
 |64|	0.037|
 |100|	0.0429|
